@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>振動ロガー | スマホで測る固有振動数</title>
+<style>
+  :root{
+    --bg:#FAF9F5; --ink:#1E2430; --muted:#6B7280; --line:#E3E0D8;
+    --accent:#0F6E56; --accent-press:#0B5743;
+    --scope-bg:#101C2E; --scope-grid:#24344E; --trace:#3CE6A6; --trace2:#F4B23E;
+    --danger:#B03A2E; --card:#FFFFFF;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
+    line-height:1.65; font-size:15px;
+  }
+  .wrap{max-width:560px; margin:0 auto; padding:20px 16px 56px;}
+  header{margin:8px 0 20px;}
+  .eyebrow{font-size:11px; letter-spacing:.22em; color:var(--accent); font-weight:600;}
+  h1{font-size:24px; margin:4px 0 2px; font-weight:700; letter-spacing:.01em;}
+  .sub{color:var(--muted); font-size:13px; margin:0;}
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:14px;
+    padding:16px; margin-bottom:14px;
+  }
+  .step{display:flex; align-items:baseline; gap:8px; margin:0 0 8px;}
+  .step b{font-size:15px;}
+  .stepnum{
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:11px; color:var(--accent); border:1px solid var(--accent);
+    border-radius:999px; padding:1px 8px; flex:none;
+  }
+  .hint{color:var(--muted); font-size:12.5px; margin:2px 0 10px;}
+  label{font-size:13px; color:var(--muted);}
+  .row{display:flex; align-items:center; gap:10px;}
+  input[type=range]{flex:1; accent-color:var(--accent);}
+  input[type=number]{
+    width:72px; padding:6px 8px; border:1px solid var(--line); border-radius:8px;
+    font:600 15px ui-monospace,Menlo,monospace; color:var(--ink); text-align:right;
+    background:var(--bg);
+  }
+  .readout{
+    display:flex; justify-content:space-between; align-items:baseline;
+    border-top:1px dashed var(--line); margin-top:12px; padding-top:10px;
+  }
+  .readout span{font-size:12.5px; color:var(--muted);}
+  .readout output{
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:22px; font-weight:600; color:var(--accent);
+  }
+  .btns{display:flex; gap:10px; flex-wrap:wrap;}
+  button{
+    appearance:none; border:0; border-radius:10px; padding:13px 18px;
+    font:600 15px inherit; cursor:pointer; flex:1; min-width:130px;
+  }
+  .primary{background:var(--accent); color:#fff;}
+  .primary:active{background:var(--accent-press);}
+  .ghost{background:transparent; border:1px solid var(--line); color:var(--ink);}
+  .stop{background:var(--danger); color:#fff; display:none;}
+  button:disabled{opacity:.45; cursor:default;}
+  .status{
+    font-size:12.5px; color:var(--muted); margin:10px 2px 0; min-height:1.4em;
+  }
+  .status.err{color:var(--danger);}
+  .scope{
+    margin-top:12px; background:var(--scope-bg); border-radius:10px;
+    padding:8px 8px 4px; position:relative;
+  }
+  .scope canvas{display:block; width:100%; height:160px;}
+  .scope .tag{
+    position:absolute; top:8px; left:12px;
+    font:600 10px ui-monospace,Menlo,monospace; letter-spacing:.16em;
+    color:#7A92B8;
+  }
+  .rec{
+    position:absolute; top:8px; right:12px; display:none;
+    font:600 10px ui-monospace,Menlo,monospace; letter-spacing:.14em; color:#FF6B5E;
+  }
+  .rec::before{
+    content:""; display:inline-block; width:7px; height:7px; border-radius:50%;
+    background:#FF6B5E; margin-right:5px; animation:blink 1s steps(1) infinite;
+  }
+  @keyframes blink{50%{opacity:.15;}}
+  @media (prefers-reduced-motion: reduce){ .rec::before{animation:none;} }
+  #results{display:none;}
+  .grid{
+    display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:4px 0 14px;
+  }
+  .cell{
+    background:var(--bg); border:1px solid var(--line); border-radius:10px;
+    padding:10px 12px;
+  }
+  .cell .k{font-size:11px; color:var(--muted); letter-spacing:.04em;}
+  .cell .v{
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+    font-size:20px; font-weight:600; margin-top:2px;
+  }
+  .cell .v small{font-size:12px; font-weight:400; color:var(--muted);}
+  .cell.hero{grid-column:1/-1; border-color:var(--accent); background:#F0F7F4;}
+  .cell.hero .v{font-size:30px; color:var(--accent);}
+  .chartbox{margin-top:14px;}
+  .chartbox h3{font-size:13px; margin:0 0 6px; color:var(--muted); font-weight:600;}
+  .chartbox canvas{display:block; width:100%; height:170px; background:var(--scope-bg); border-radius:10px;}
+  .csv{display:inline-block; margin-top:12px; font-size:12.5px; color:var(--accent);}
+  footer{color:var(--muted); font-size:11.5px; margin-top:22px; line-height:1.7;}
+  footer b{color:var(--ink);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">SMARTPHONE VIBRATION LAB</div>
+  <h1>振動ロガー</h1>
+  <p class="sub">輪ゴムとものさしとスマホで、固有振動数を予測して実測する</p>
+</header>
+
+<div class="card">
+  <div class="step"><span class="stepnum">STEP 1</span><b>理論値を予測する</b></div>
+  <p class="hint">輪ゴムでスマホを吊るし、吊るす前後の伸び δ をものさしで測って入力。質量もばね定数も不要です： f<sub>n</sub> = (1/2π)·√(g/δ)</p>
+  <div class="row">
+    <label for="deltaRange">静的伸び δ</label>
+    <input type="range" id="deltaRange" min="1" max="25" step="0.5" value="5">
+    <input type="number" id="deltaNum" min="0.5" max="50" step="0.5" value="5">
+    <label>cm</label>
+  </div>
+  <div class="readout">
+    <span>理論固有振動数 f<sub>n</sub></span>
+    <output id="fTheory">2.23 Hz</output>
+  </div>
+</div>
+
+<div class="card">
+  <div class="step"><span class="stepnum">STEP 2</span><b>計測する</b></div>
+  <p class="hint">スマホを吊るしたまま「計測開始」→ 2〜3 cm 下に引いて静かに放す → 10 秒ほど揺らして「停止」。20 秒で自動停止します。</p>
+  <div class="btns">
+    <button class="primary" id="btnStart">計測開始</button>
+    <button class="stop" id="btnStop">停止</button>
+    <button class="ghost" id="btnDemo">デモデータで試す</button>
+  </div>
+  <div class="status" id="status">センサ待機中（iPhone は開始時に計測の許可を求めます）</div>
+  <div class="scope">
+    <span class="tag">LIVE&nbsp;ACCEL</span>
+    <span class="rec" id="recBadge">REC</span>
+    <canvas id="liveCanvas"></canvas>
+  </div>
+</div>
+
+<div class="card" id="results">
+  <div class="step"><span class="stepnum">STEP 3</span><b>結果と照合</b></div>
+  <div class="grid">
+    <div class="cell hero">
+      <div class="k">実測固有振動数（FFT ピーク）</div>
+      <div class="v" id="fMeas">— Hz</div>
+    </div>
+    <div class="cell"><div class="k">理論値</div><div class="v" id="fTheory2">— <small>Hz</small></div></div>
+    <div class="cell"><div class="k">理論との差</div><div class="v" id="errPct">— <small>%</small></div></div>
+    <div class="cell"><div class="k">採用した軸</div><div class="v" id="axisUsed">—</div></div>
+    <div class="cell"><div class="k">サンプリング</div><div class="v" id="fsUsed">— <small>Hz</small></div></div>
+  </div>
+  <div class="chartbox">
+    <h3>加速度の時刻歴（平均値を除去）</h3>
+    <canvas id="timeCanvas"></canvas>
+  </div>
+  <div class="chartbox">
+    <h3>振幅スペクトル（0–10 Hz）</h3>
+    <canvas id="specCanvas"></canvas>
+  </div>
+  <a href="#" class="csv" id="csvLink">計測データを CSV でダウンロード</a>
+</div>
+
+<footer>
+  <b>動作条件：</b>加速度センサは HTTPS のページでのみ使えます（GitHub Pages は自動で HTTPS）。
+  iPhone（iOS 13 以降）は初回に「動作と方向」の許可が必要です。
+  PC など、センサのない端末では「デモデータで試す」で全機能を確認できます。<br>
+  <b>考察のヒント：</b>波形の山が少しずつ小さくなるのはなぜか（減衰）。振幅を大きくすると周期はどう変わるか（輪ゴムの非線形性）。
+</footer>
+
+</div>
+
+<script>
+"use strict";
+/* ---------- 理論値 (静的たわみ法) ---------- */
+const G = 9.81;
+const $ = id => document.getElementById(id);
+function fTheoryHz(deltaCm){ return Math.sqrt(G/(deltaCm/100))/(2*Math.PI); }
+function syncDelta(v){
+  v = Math.max(0.5, Math.min(50, parseFloat(v)||5));
+  $("deltaRange").value = Math.min(25, v);
+  $("deltaNum").value = v;
+  $("fTheory").textContent = fTheoryHz(v).toFixed(2) + " Hz";
+  if(lastResult) renderComparison();
+}
+$("deltaRange").addEventListener("input", e=>syncDelta(e.target.value));
+$("deltaNum").addEventListener("input", e=>syncDelta(e.target.value));
+
+/* ---------- 計測 ---------- */
+let recording = false;
+let samples = [];          // {t, x, y, z}  t: 秒
+let rafId = null;
+let autoStopTimer = null;
+let sensorSeen = false;
+let lastResult = null;
+
+function onMotion(e){
+  let a = e.acceleration;
+  if(!a || a.x === null) a = e.accelerationIncludingGravity;
+  if(!a || a.x === null) return;
+  sensorSeen = true;
+  if(recording) samples.push({t: performance.now()/1000, x:a.x, y:a.y, z:a.z});
+}
+
+async function ensurePermission(){
+  if(typeof DeviceMotionEvent !== "undefined" &&
+     typeof DeviceMotionEvent.requestPermission === "function"){
+    try{
+      const r = await DeviceMotionEvent.requestPermission();
+      return r === "granted";
+    }catch(err){ return false; }
+  }
+  return true;
+}
+
+function setStatus(msg, isErr){
+  const s = $("status");
+  s.textContent = msg;
+  s.className = "status" + (isErr ? " err" : "");
+}
+
+async function startMeasure(){
+  const ok = await ensurePermission();
+  if(!ok){ setStatus("センサの利用が許可されませんでした。Safari の設定を確認するか、デモでお試しください。", true); return; }
+  samples = []; sensorSeen = false; recording = true; lastResult = null;
+  window.addEventListener("devicemotion", onMotion);
+  $("btnStart").style.display = "none";
+  $("btnStop").style.display = "block";
+  $("btnDemo").disabled = true;
+  $("recBadge").style.display = "inline";
+  $("results").style.display = "none";
+  setStatus("計測中… スマホを引いて放してください（最長 20 秒）");
+  drawLiveLoop();
+  setTimeout(()=>{
+    if(recording && !sensorSeen){
+      setStatus("センサ値が届いていません。HTTPS で開いているか確認するか、「デモデータで試す」をどうぞ。", true);
+    }
+  }, 1800);
+  autoStopTimer = setTimeout(()=>{ if(recording) stopMeasure(); }, 20000);
+}
+
+function stopMeasure(){
+  recording = false;
+  clearTimeout(autoStopTimer);
+  window.removeEventListener("devicemotion", onMotion);
+  if(rafId) cancelAnimationFrame(rafId);
+  $("btnStart").style.display = "block";
+  $("btnStop").style.display = "none";
+  $("btnDemo").disabled = false;
+  $("recBadge").style.display = "none";
+  if(samples.length < 120){
+    setStatus("データが足りません（2 秒以上は計測してください）。", true);
+    return;
+  }
+  setStatus("解析中…");
+  setTimeout(()=>{ analyze(samples); }, 30);
+}
+
+$("btnStart").addEventListener("click", startMeasure);
+$("btnStop").addEventListener("click", stopMeasure);
+
+/* ---------- デモデータ（PC 確認用） ---------- */
+$("btnDemo").addEventListener("click", ()=>{
+  const fs = 60, dur = 12, f = fTheoryHz(parseFloat($("deltaNum").value)||5);
+  const zeta = 0.018, wn = 2*Math.PI*f, wd = wn*Math.sqrt(1-zeta*zeta);
+  const t0 = performance.now()/1000;
+  samples = [];
+  for(let i=0;i<fs*dur;i++){
+    const t = i/fs;
+    const env = 3.0*Math.exp(-zeta*wn*t);
+    const sig = env*Math.sin(wd*t) + 0.12*(Math.random()-0.5);
+    samples.push({t:t0+t, x:0.05*(Math.random()-0.5), y:0.05*(Math.random()-0.5), z:sig+9.81});
+  }
+  setStatus("デモデータ（理論値どおりの減衰自由振動＋ノイズ）を解析しました。");
+  analyze(samples);
+});
+
+/* ---------- ライブ描画 ---------- */
+function fitCanvas(cv){
+  const dpr = window.devicePixelRatio || 1;
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if(cv.width !== Math.round(w*dpr)){ cv.width = Math.round(w*dpr); cv.height = Math.round(h*dpr); }
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return [ctx, w, h];
+}
+
+function drawLiveLoop(){
+  const cv = $("liveCanvas");
+  const [ctx,w,h] = fitCanvas(cv);
+  ctx.clearRect(0,0,w,h);
+  drawGrid(ctx,w,h);
+  const win = 4; // 直近 4 秒
+  const now = performance.now()/1000;
+  const seg = samples.filter(s=>s.t > now-win);
+  if(seg.length > 4){
+    const best = bestAxis(seg);
+    const ys = seg.map(s=>s[best]);
+    const mean = ys.reduce((a,b)=>a+b,0)/ys.length;
+    let amp = Math.max(0.6, ...ys.map(v=>Math.abs(v-mean)));
+    ctx.beginPath();
+    ctx.strokeStyle = "#3CE6A6"; ctx.lineWidth = 1.6;
+    seg.forEach((s,i)=>{
+      const x = (s.t-(now-win))/win*w;
+      const y = h/2 - (s[best]-mean)/amp*(h/2-12);
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+  }
+  if(recording) rafId = requestAnimationFrame(drawLiveLoop);
+}
+
+function drawGrid(ctx,w,h){
+  ctx.strokeStyle = "#24344E"; ctx.lineWidth = 0.6;
+  for(let i=1;i<4;i++){ ctx.beginPath(); ctx.moveTo(0,h*i/4); ctx.lineTo(w,h*i/4); ctx.stroke(); }
+  for(let i=1;i<8;i++){ ctx.beginPath(); ctx.moveTo(w*i/8,0); ctx.lineTo(w*i/8,h); ctx.stroke(); }
+  ctx.strokeStyle = "#3A4F70"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(0,h/2); ctx.lineTo(w,h/2); ctx.stroke();
+}
+
+/* ---------- 信号処理 ---------- */
+function bestAxis(seg){
+  let best = "z", bestVar = -1;
+  for(const ax of ["x","y","z"]){
+    const v = seg.map(s=>s[ax]);
+    const m = v.reduce((a,b)=>a+b,0)/v.length;
+    const va = v.reduce((a,b)=>a+(b-m)*(b-m),0)/v.length;
+    if(va > bestVar){ bestVar = va; best = ax; }
+  }
+  return best;
+}
+
+function fft(re, im){
+  const n = re.length;
+  for(let i=1,j=0;i<n;i++){
+    let bit = n>>1;
+    for(; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if(i<j){ [re[i],re[j]]=[re[j],re[i]]; [im[i],im[j]]=[im[j],im[i]]; }
+  }
+  for(let len=2; len<=n; len<<=1){
+    const ang = -2*Math.PI/len;
+    const wr = Math.cos(ang), wi = Math.sin(ang);
+    for(let i=0;i<n;i+=len){
+      let cr=1, ci=0;
+      for(let k=0;k<len/2;k++){
+        const ur=re[i+k], ui=im[i+k];
+        const vr=re[i+k+len/2]*cr - im[i+k+len/2]*ci;
+        const vi=re[i+k+len/2]*ci + im[i+k+len/2]*cr;
+        re[i+k]=ur+vr; im[i+k]=ui+vi;
+        re[i+k+len/2]=ur-vr; im[i+k+len/2]=ui-vi;
+        const ncr = cr*wr - ci*wi; ci = cr*wi + ci*wr; cr = ncr;
+      }
+    }
+  }
+}
+
+function analyze(raw){
+  const t0 = raw[0].t;
+  const ts = raw.map(s=>s.t - t0);
+  const dur = ts[ts.length-1];
+  const fs = Math.min(200, Math.max(20, (raw.length-1)/dur));
+  const ax = bestAxis(raw);
+  // 平均除去
+  const v0 = raw.map(s=>s[ax]);
+  const mean = v0.reduce((a,b)=>a+b,0)/v0.length;
+  const v = v0.map(x=>x-mean);
+  // 等間隔リサンプリング（線形補間）
+  const N0 = Math.floor(dur*fs);
+  const u = new Array(N0);
+  let j = 0;
+  for(let i=0;i<N0;i++){
+    const t = i/fs;
+    while(j < ts.length-2 && ts[j+1] < t) j++;
+    const r = (t - ts[j]) / Math.max(1e-9, ts[j+1]-ts[j]);
+    u[i] = v[j] + Math.min(1,Math.max(0,r))*(v[j+1]-v[j]);
+  }
+  // ハン窓 + ゼロ詰め FFT
+  let N = 4096; while(N < N0) N <<= 1;
+  const re = new Array(N).fill(0), im = new Array(N).fill(0);
+  for(let i=0;i<N0;i++){
+    const wnd = 0.5*(1-Math.cos(2*Math.PI*i/(N0-1)));
+    re[i] = u[i]*wnd;
+  }
+  fft(re,im);
+  const half = N/2;
+  const mag = new Array(half);
+  for(let i=0;i<half;i++) mag[i] = Math.hypot(re[i],im[i]);
+  // 0.4–12 Hz でピーク探索 + 放物線補間
+  const kLo = Math.max(2, Math.ceil(0.4*N/fs));
+  const kHi = Math.min(half-2, Math.floor(12*N/fs));
+  let kp = kLo;
+  for(let k=kLo;k<=kHi;k++) if(mag[k] > mag[kp]) kp = k;
+  const d = 0.5*(mag[kp-1]-mag[kp+1]) /
+            Math.max(1e-12,(mag[kp-1]-2*mag[kp]+mag[kp+1]));
+  const fPeak = (kp + (isFinite(d)?Math.max(-0.5,Math.min(0.5,d)):0)) * fs/N;
+
+  lastResult = {fPeak, fs, ax, u, N0, mag, N, raw};
+  renderComparison();
+  drawTimeChart(u, fs);
+  drawSpecChart(mag, fs, N, fPeak);
+  buildCSV(raw);
+  $("results").style.display = "block";
+  setStatus("解析が完了しました。理論値と比べてみてください。");
+  $("results").scrollIntoView({behavior:"smooth", block:"start"});
+}
+
+function renderComparison(){
+  if(!lastResult) return;
+  const fT = fTheoryHz(parseFloat($("deltaNum").value)||5);
+  const fM = lastResult.fPeak;
+  $("fMeas").textContent = fM.toFixed(2) + " Hz";
+  $("fTheory2").innerHTML = fT.toFixed(2) + " <small>Hz</small>";
+  const e = (fM-fT)/fT*100;
+  $("errPct").innerHTML = (e>=0?"+":"") + e.toFixed(1) + " <small>%</small>";
+  $("axisUsed").textContent = lastResult.ax.toUpperCase() + " 軸";
+  $("fsUsed").innerHTML = lastResult.fs.toFixed(0) + " <small>Hz</small>";
+}
+
+/* ---------- 結果チャート ---------- */
+function chartFrame(cv){
+  const [ctx,w,h] = fitCanvas(cv);
+  ctx.clearRect(0,0,w,h);
+  return [ctx,w,h,{l:34,r:8,t:10,b:20}];
+}
+function axisText(ctx){ ctx.fillStyle="#7A92B8"; ctx.font="10px ui-monospace,Menlo,monospace"; }
+
+function drawTimeChart(u, fs){
+  const cv = $("timeCanvas");
+  const [ctx,w,h,p] = chartFrame(cv);
+  const iw = w-p.l-p.r, ih = h-p.t-p.b;
+  ctx.strokeStyle="#24344E"; ctx.lineWidth=0.6;
+  for(let i=0;i<=4;i++){ const y=p.t+ih*i/4; ctx.beginPath(); ctx.moveTo(p.l,y); ctx.lineTo(w-p.r,y); ctx.stroke(); }
+  const dur = u.length/fs;
+  const amp = Math.max(0.3, ...u.map(Math.abs));
+  ctx.beginPath(); ctx.strokeStyle="#3CE6A6"; ctx.lineWidth=1.2;
+  const step = Math.max(1, Math.floor(u.length/(iw*2)));
+  for(let i=0;i<u.length;i+=step){
+    const x = p.l + (i/fs)/dur*iw;
+    const y = p.t + ih/2 - u[i]/amp*(ih/2-4);
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  axisText(ctx);
+  for(let s=0;s<=Math.floor(dur);s+=Math.max(1,Math.round(dur/6))){
+    ctx.fillText(s+" s", p.l + s/dur*iw - 6, h-6);
+  }
+  ctx.save(); ctx.translate(10,p.t+ih/2); ctx.rotate(-Math.PI/2);
+  ctx.fillText("±"+amp.toFixed(1)+" m/s²", -28, 0); ctx.restore();
+}
+
+function drawSpecChart(mag, fs, N, fPeak){
+  const cv = $("specCanvas");
+  const [ctx,w,h,p] = chartFrame(cv);
+  const iw = w-p.l-p.r, ih = h-p.t-p.b;
+  const fMax = 10;
+  const kMax = Math.min(mag.length-1, Math.floor(fMax*N/fs));
+  let mMax = 1e-12;
+  for(let k=1;k<=kMax;k++) mMax = Math.max(mMax, mag[k]);
+  ctx.strokeStyle="#24344E"; ctx.lineWidth=0.6;
+  for(let f=1;f<fMax;f++){ const x=p.l+f/fMax*iw; ctx.beginPath(); ctx.moveTo(x,p.t); ctx.lineTo(x,h-p.b); ctx.stroke(); }
+  ctx.beginPath(); ctx.strokeStyle="#F4B23E"; ctx.lineWidth=1.4;
+  for(let k=1;k<=kMax;k++){
+    const x = p.l + (k*fs/N)/fMax*iw;
+    const y = p.t + ih - (mag[k]/mMax)*ih;
+    k===1 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  const xp = p.l + fPeak/fMax*iw;
+  ctx.strokeStyle="#3CE6A6"; ctx.setLineDash([4,3]); ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(xp,p.t); ctx.lineTo(xp,h-p.b); ctx.stroke();
+  ctx.setLineDash([]);
+  axisText(ctx);
+  ctx.fillStyle="#3CE6A6";
+  ctx.fillText(fPeak.toFixed(2)+" Hz", Math.min(xp+5, w-58), p.t+12);
+  axisText(ctx);
+  for(let f=0;f<=fMax;f+=2) ctx.fillText(f+" Hz", p.l+f/fMax*iw-8, h-6);
+}
+
+/* ---------- CSV ---------- */
+function buildCSV(raw){
+  const t0 = raw[0].t;
+  let csv = "t_s,ax_mps2,ay_mps2,az_mps2\n";
+  for(const s of raw) csv += (s.t-t0).toFixed(4)+","+s.x.toFixed(4)+","+s.y.toFixed(4)+","+s.z.toFixed(4)+"\n";
+  const blob = new Blob([csv], {type:"text/csv"});
+  const a = $("csvLink");
+  a.href = URL.createObjectURL(blob);
+  a.download = "vibration_data.csv";
+}
+
+/* ---------- 初期化 ---------- */
+syncDelta(5);
+(function(){ const cv=$("liveCanvas"); const [ctx,w,h]=fitCanvas(cv); drawGrid(ctx,w,h); })();
+window.addEventListener("resize", ()=>{
+  const cv=$("liveCanvas"); const [ctx,w,h]=fitCanvas(cv); drawGrid(ctx,w,h);
+  if(lastResult){ drawTimeChart(lastResult.u, lastResult.fs); drawSpecChart(lastResult.mag, lastResult.fs, lastResult.N, lastResult.fPeak); }
+});
+</script>
+</body>
+</html>
